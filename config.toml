@@ -1,0 +1,14 @@
+baseURL = 'localhost:1313'
+languageCode = 'en-us'
+title = "Piefayth's Blog"
+theme = "hugo-blog-awesome"
+
+[params.author]
+    avatar = "charlie.png"
+
+[[params.socialIcons]]
+name = "github"
+url = "https://github.com/piefayth"
+
+[params]
+    toc = true
