@@ -710,4 +710,4 @@ Now that we understand the relationship between minting policies and spending va
 
 2. The minting policy for the authorizing NFTs leveraged by the count spending validator [disallows updates of existing count data during transactions that include a mint](https://github.com/Piefayth/aiken-blog-1-code/blob/main/validators/secure_count.ak#L102). Modify the validator to support doing both in one transaction. What needs to change for you to be able to identify which output belongs with which input (if any)?
 
-3. What alternatives are there, if any, to the "authorizing NFT" scheme?
+3. What alternatives are there, if any, to the "authorizing NFT" scheme? How else could we get trusted data on chain?
