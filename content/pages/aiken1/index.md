@@ -347,6 +347,8 @@ validator {
 }
 ```
 
+Nothing tricky is happening here. The validator retrieves the old datum, retrieves the updated datum, then compares them to make sure that the update was appropriate. 
+
 This is much like the previous spending validator; we've just added an additional requirement via the `count` field of the datum.  In addition to having permission to spend the utxo at the count script address, the caller must include an output back to the same address that includes an appropriately incremented datum. For simplicity's sake, the contract assumes that there is only a single script output (a single updated count), but it could have been written to support multiple at once. 
 
 Composing the initial transaction is no different than before. Just update the datum type.
@@ -369,7 +371,9 @@ const depositTx = await lucid.newTx()
   .complete()
 ```
 
-Since the asset value being stored here is irrelevant, it can be omitted. Lucid will automatically calculate the minimum amount of ADA required and add it to the transaction outputs from the currently configured wallet. Spending is similar, but not identical, to the last spending validator. This time the contract mandates a spend _back_ to the contract with the updated datum. So in addition to `collectFrom` to initialize the spend, we must include an appropriately parameterized `payToAddressWithData` back to the contract.
+Since the asset value being stored here is irrelevant, it can be omitted. Lucid will automatically calculate the minimum amount of ADA required and add it to the transaction outputs from the currently configured wallet. 
+
+Spending is similar, but not identical, to the previous spending validator. This time the contract mandates a spend _back_ to the contract with the updated datum. So in addition to `collectFrom` to initialize the spend, we must include an appropriately parameterized `payToAddressWithData` back to the contract.
 
 ```ts
 const contractUtxos = await lucid.utxosAt(contractAddress)
@@ -453,9 +457,9 @@ const depositTx = await lucid.newTx()
 
 Since this initial send to the contract address does not trigger the spending validator, we can make no guarantees about its authenticity! A caller can easily spoof arbitrarily high counts. If we are trying to build a trustless protocol from our contracts, this is a problem. How do you validate a "new" output to the contract address?
 
-One interesting property of minting policies is that they produce utxos without consuming any inputs. This means that if we can prove a utxo was created with the permission of a particular minting policy, we can know - in a guaranteed and trustless way - that the initial state of the datum on that utxo is valid. This "proof" can be provided in the form of an NFT minted and placed on the utxo. The minting policy will validate that the NFTs are only ever created at our count script address, and the count contract will verify that the NFTs are never spent to an address other than the contract's own. In this way, we can be confident that any transaction output that contains this "authorizing" NFT was formed per the rules of our contract.
+One interesting property of minting policies is that they produce utxos without consuming any inputs. This means that if we can prove a utxo was created with the permission of a particular minting policy, we can know - in a guaranteed and trustless way - that the initial state of the datum on that utxo is valid. This "proof" can be provided in the form of an NFT that is minted and placed on the utxo. The minting policy will validate that the NFTs are only ever created at our count script address, and the count contract will verify that the NFTs are never spent to an address other than the contract's own. In this way, we can be confident that any transaction output that contains this "authorizing" NFT was formed per the rules of our contract.
 
-Let's break that down and implement it. Remember to check the full code for the [script](https://github.com/Piefayth/aiken-blog-1-code/blob/main/validators/secure_count.ak) and [validator](https://github.com/Piefayth/aiken-blog-1-code/blob/main/scripts/secure_count.ts) as needed. There are three core logical checks that the minting policy must do.
+Let's break that down and implement it. Remember to check the full code for the [script](https://github.com/Piefayth/aiken-blog-1-code/blob/main/validators/secure_count.ak) and [validator](https://github.com/Piefayth/aiken-blog-1-code/blob/main/scripts/secure_count.ts) as needed. There are three core logical checks that the minting policy must do to ensure the integrity of both the authorizing NFT and the count datum itself.
 
 1. Check that this transaction does not spend an existing count datum. This isn't a technical restriction; it is possible to both update an existing count datum in the same transaction that new one is created. This is merely a simplification we are performing to reduce the complexity of the contract.
 2. Check that each newly created utxo contains a properly formed datum.
@@ -501,9 +505,11 @@ validator(count_script_hash: ByteArray) {
 }
 ```
 
-There is a new field in our datum: `authorizing_policy`. Because this minting policy is parameterized by the `count_script_hash`, we can not, in turn, parameterize the count script itself with the minting policy id. Doing so would create a circular dependency. To handle that, the `policy_id` is assigned to a field of the datum and validated in the minting transaction. That `policy_id` can then be consumed in the spending validator.
+There is a new field in our datum: `authorizing_policy`. Because this minting policy is parameterized by the `count_script_hash`, we can not, in turn, parameterize the count script itself with the minting policy id. Doing so would create a circular dependency. To handle that, the `policy_id` is assigned to a field of the datum and validated in the minting transaction. That `policy_id` will later be consumed in the spending validator.
 
-Checks #1 and #2 have been factored into the functions `no_count_data_in_inputs` and `no_invalid_count_data` respectively. For the former, we can leverage the built-in `find_script_outputs`. Given a list of outputs, this function will return only outputs that are to a particular script. If that list is empty, we can be sure that this transaction does not include any spends from the count script address.
+Checks #1 and #2 have been factored into the functions `no_count_data_in_inputs` and `no_invalid_count_data` respectively. 
+
+For the former, we can leverage the built-in `find_script_outputs`. Given a list of outputs, this function will return only outputs that are to a particular script. If that list is empty, we can be sure that this transaction does not include any spends from the count script address.
 
 ```haskell
 fn no_count_data_in_inputs(
@@ -603,7 +609,7 @@ Now the state of our initial datum for the counting validator is guaranteed by t
 1. The input being spent from the count script address holds an authorizing NFT.
 2. The output being created with the updated count also holds the authorizing NFT.
 
-Both checks are effectively the same logic.
+Both checks are effectively the same logic:
 
 ```haskell
 fn output_has_authorizing_nft(
@@ -651,6 +657,8 @@ validator {
 }
 ```
 
+This is the link between our spending validator and minting policy. By verifying exactly 1 authorizing NFT is always in the utxo storing the count datum, we can be confident in the integrity of the datum.
+
 With the minting policy for the authorizing NFT in place, and the spending validator updated, we can now have a stateful count datum that is guaranteed to play by the rules we've defined! Let's perform an update on our new count validator to make sure.
 
 ```ts
@@ -696,9 +704,10 @@ Now that we understand the relationship between minting policies and spending va
 
 ---
 
-Homework:
+## Homework / Food for Thought:
 
 1. The count spending validator [assumes that there is only a single count being updated](https://github.com/Piefayth/aiken-blog-1-code/blob/main/validators/secure_count.ak#L54-L59). Modify the validator and the transaction that calls it to support updating multiple count datums at once. 
 
 2. The minting policy for the authorizing NFTs leveraged by the count spending validator [disallows updates of existing count data during transactions that include a mint](https://github.com/Piefayth/aiken-blog-1-code/blob/main/validators/secure_count.ak#L102). Modify the validator to support doing both in one transaction. What needs to change for you to be able to identify which output belongs with which input (if any)?
 
+3. What alternatives are there, if any, to the "authorizing NFT" scheme?
