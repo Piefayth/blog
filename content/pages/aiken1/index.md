@@ -92,7 +92,7 @@ validator {
 }
 ```
 
-By defining a type for the redeemer, we declare what the validator expects as input: a `guessed word` as a `ByteArray`. In Aiken, strings are just ByteArrays, so both the type and the validation are easy to implement here. If the redeemer includes a `guessed_word` of `"secret"`, the associated transaction may mint or burn whatever amount of tokens it requests.
+By defining a type for the redeemer, we declare what the validator expects as input: a `guessed word` as a `ByteArray`. In Aiken, strings are just ByteArrays, so both the type and the validation are easy to implement here. If, and only if, the redeemer includes a `guessed_word` of `"secret"`, the associated transaction may mint or burn whatever amount of tokens it requests.
 
 Things get more exotic with Lucid and TypeScript. Here's an implementation of a transaction that mints from that contract.
 
@@ -188,6 +188,8 @@ const tx = await lucid.newTx()
     )
     .complete()
 ```
+
+In this instance, we parameterize the validator from TypeScript with a secret of `"new secret"`. Calling the contract is otherwise identical, besides the updated secret.
 
 This is interesting, because now we can create new contracts in our client applications at runtime. Users could each provide a custom code word and receive a custom minting policy that only works with the word they've chosen. But this has a potentially fatal flaw: the tokens minted by each user will have a unique policy id. They _aren't the same token_. In certain cases, like creating a gift card, that can be desirable - a policy mints a single gift card for a single payment by a single user. In our case, all this means is we aren't any closer to having dynamic state! We're exactly where we were before. Each unique minting policy has a single, hardcoded code word; we just have many policies now.
 
